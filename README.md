@@ -7,7 +7,7 @@ A Rust HTTP server for Python applications.
 The main reasons behind Granian design are:
 
 - Have a single, correct HTTP implementation, supporting versions 1, 2 (and eventually 3)
-- Provide a single package for several platforms 
+- Provide a single package for several platforms
 - Avoid the usual Gunicorn + uvicorn + http-tools dependency composition on unix systems
 - Provide stable [performance](https://github.com/emmett-framework/granian/blob/master/benchmarks/README.md) when compared to existing alternatives
 
@@ -176,9 +176,11 @@ Options:
                                   (disabled)]
   --access-log-fmt TEXT           Access log format  [env var:
                                   GRANIAN_LOG_ACCESS_FMT]
-  --ssl-keyfile FILE              SSL key file  [env var: GRANIAN_SSL_KEYFILE]
   --ssl-certificate FILE          SSL certificate file  [env var:
                                   GRANIAN_SSL_CERTIFICATE]
+  --ssl-keyfile FILE              SSL key file  [env var: GRANIAN_SSL_KEYFILE]
+  --ssl-keyfile-password TEXT     SSL key password  [env var:
+                                  GRANIAN_SSL_KEYFILE_PASSWORD]
   --url-path-prefix TEXT          URL path prefix the app is mounted on  [env
                                   var: GRANIAN_URL_PATH_PREFIX]
   --respawn-failed-workers / --no-respawn-failed-workers
@@ -188,13 +190,37 @@ Options:
   --respawn-interval FLOAT        The number of seconds to sleep between
                                   workers respawn  [env var:
                                   GRANIAN_RESPAWN_INTERVAL; default: 3.5]
+  --workers-lifetime INTEGER RANGE
+                                  The maximum amount of time in seconds a
+                                  worker will be kept alive before respawn
+                                  [env var: GRANIAN_WORKERS_LIFETIME; x>=60]
+  --factory / --no-factory        Treat target as a factory function, that
+                                  should be invoked to build the actual target
+                                  [env var: GRANIAN_FACTORY; default:
+                                  (disabled)]
   --reload / --no-reload          Enable auto reload on application's files
                                   changes (requires granian[reload] extra)
                                   [env var: GRANIAN_RELOAD; default:
                                   (disabled)]
+  --reload-paths PATH             Paths to watch for changes  [env var:
+                                  GRANIAN_RELOAD_PATHS; default: (Working
+                                  directory)]
+  --reload-ignore-dirs TEXT       Names of directories to ignore changes for.
+                                  Extends the default list of directories to
+                                  ignore in watchfiles' default filter  [env
+                                  var: GRANIAN_RELOAD_IGNORE_DIRS]
+  --reload-ignore-patterns TEXT   File/directory name patterns (regex) to
+                                  ignore changes for. Extends the default list
+                                  of patterns to ignore in watchfiles' default
+                                  filter  [env var:
+                                  GRANIAN_RELOAD_IGNORE_PATTERNS]
+  --reload-ignore-paths PATH      Absolute paths to ignore changes for  [env
+                                  var: GRANIAN_RELOAD_IGNORE_PATHS]
   --process-name TEXT             Set a custom name for processes (requires
                                   granian[pname] extra)  [env var:
                                   GRANIAN_PROCESS_NAME]
+  --pid-file FILE                 A path to write the PID file to  [env var:
+                                  GRANIAN_PID_FILE]
   --version                       Show the version and exit.
   --help                          Show this message and exit.
 ```

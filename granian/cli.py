@@ -1,7 +1,7 @@
 import json
 import pathlib
 from enum import Enum
-from typing import Any, Callable, Optional, Type, TypeVar, Union
+from typing import Any, Callable, List, Optional, Type, TypeVar, Union
 
 import click
 
@@ -169,15 +169,16 @@ def option(*param_decls: str, cls: Optional[Type[click.Option]] = None, **attrs:
 @option('--access-log/--no-access-log', 'log_access_enabled', default=False, help='Enable access log')
 @option('--access-log-fmt', 'log_access_fmt', help='Access log format')
 @option(
-    '--ssl-keyfile',
-    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=pathlib.Path),
-    help='SSL key file',
-)
-@option(
     '--ssl-certificate',
     type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=pathlib.Path),
     help='SSL certificate file',
 )
+@option(
+    '--ssl-keyfile',
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=pathlib.Path),
+    help='SSL key file',
+)
+@option('--ssl-keyfile-password', help='SSL key password')
 @option('--url-path-prefix', help='URL path prefix the app is mounted on')
 @option(
     '--respawn-failed-workers/--no-respawn-failed-workers',
@@ -190,9 +191,48 @@ def option(*param_decls: str, cls: Optional[Type[click.Option]] = None, **attrs:
     help='The number of seconds to sleep between workers respawn',
 )
 @option(
+    '--workers-lifetime',
+    type=click.IntRange(60),
+    help='The maximum amount of time in seconds a worker will be kept alive before respawn',
+)
+@option(
+    '--factory/--no-factory',
+    default=False,
+    help='Treat target as a factory function, that should be invoked to build the actual target',
+)
+@option(
     '--reload/--no-reload',
     default=False,
     help="Enable auto reload on application's files changes (requires granian[reload] extra)",
+)
+@option(
+    '--reload-paths',
+    type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True, path_type=pathlib.Path),
+    help='Paths to watch for changes',
+    show_default='Working directory',
+    multiple=True,
+)
+@option(
+    '--reload-ignore-dirs',
+    help=(
+        'Names of directories to ignore changes for. '
+        "Extends the default list of directories to ignore in watchfiles' default filter"
+    ),
+    multiple=True,
+)
+@option(
+    '--reload-ignore-patterns',
+    help=(
+        'File/directory name patterns (regex) to ignore changes for. '
+        "Extends the default list of patterns to ignore in watchfiles' default filter"
+    ),
+    multiple=True,
+)
+@option(
+    '--reload-ignore-paths',
+    type=click.Path(exists=False, path_type=pathlib.Path),
+    help='Absolute paths to ignore changes for',
+    multiple=True,
 )
 @option(
     '--process-name',
@@ -236,12 +276,19 @@ def cli(
     log_access_fmt: Optional[str],
     log_level: LogLevels,
     log_config: Optional[pathlib.Path],
-    ssl_keyfile: Optional[pathlib.Path],
     ssl_certificate: Optional[pathlib.Path],
+    ssl_keyfile: Optional[pathlib.Path],
+    ssl_keyfile_password: Optional[str],
     url_path_prefix: Optional[str],
     respawn_failed_workers: bool,
     respawn_interval: float,
+    workers_lifetime: Optional[int],
+    factory: bool,
     reload: bool,
+    reload_paths: Optional[List[pathlib.Path]],
+    reload_ignore_dirs: Optional[List[str]],
+    reload_ignore_patterns: Optional[List[str]],
+    reload_ignore_paths: Optional[List[pathlib.Path]],
     process_name: Optional[str],
     pid_file: Optional[pathlib.Path],
 ) -> None:
@@ -290,10 +337,17 @@ def cli(
         log_access_format=log_access_fmt,
         ssl_cert=ssl_certificate,
         ssl_key=ssl_keyfile,
+        ssl_key_password=ssl_keyfile_password,
         url_path_prefix=url_path_prefix,
         respawn_failed_workers=respawn_failed_workers,
         respawn_interval=respawn_interval,
+        workers_lifetime=workers_lifetime,
+        factory=factory,
         reload=reload,
+        reload_paths=reload_paths,
+        reload_ignore_paths=reload_ignore_paths,
+        reload_ignore_dirs=reload_ignore_dirs,
+        reload_ignore_patterns=reload_ignore_patterns,
         process_name=process_name,
         pid_file=pid_file,
     )

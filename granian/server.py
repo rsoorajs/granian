@@ -12,7 +12,7 @@ import threading
 import time
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type
 
 from ._futures import future_watcher_wrapper
 from ._granian import ASGIWorker, RSGIWorker, WSGIWorker
@@ -36,6 +36,7 @@ class Worker:
         self.parent = parent
         self.idx = idx
         self.interrupt_by_parent = False
+        self.birth = time.time()
         self._spawn(target, args)
 
     def _spawn(self, target, args):
@@ -91,10 +92,18 @@ class Granian:
         log_access_format: Optional[str] = None,
         ssl_cert: Optional[Path] = None,
         ssl_key: Optional[Path] = None,
+        ssl_key_password: Optional[str] = None,
         url_path_prefix: Optional[str] = None,
         respawn_failed_workers: bool = False,
         respawn_interval: float = 3.5,
+        workers_lifetime: Optional[int] = None,
+        factory: bool = False,
         reload: bool = False,
+        reload_paths: Optional[Sequence[Path]] = None,
+        reload_ignore_dirs: Optional[Sequence[str]] = None,
+        reload_ignore_patterns: Optional[Sequence[str]] = None,
+        reload_ignore_paths: Optional[Sequence[Path]] = None,
+        reload_filter: Optional[Type[watchfiles.BaseFilter]] = None,
         process_name: Optional[str] = None,
         pid_file: Optional[Path] = None,
     ):
@@ -129,12 +138,19 @@ class Granian:
         self.respawn_failed_workers = respawn_failed_workers
         self.reload_on_changes = reload
         self.respawn_interval = respawn_interval
+        self.workers_lifetime = workers_lifetime
+        self.factory = factory
+        self.reload_paths = reload_paths or [Path.cwd()]
+        self.reload_ignore_paths = reload_ignore_paths or ()
+        self.reload_ignore_dirs = reload_ignore_dirs or ()
+        self.reload_ignore_patterns = reload_ignore_patterns or ()
+        self.reload_filter = reload_filter
         self.process_name = process_name
         self.pid_file = pid_file
 
         configure_logging(self.log_level, self.log_config, self.log_enabled)
 
-        self.build_ssl_context(ssl_cert, ssl_key)
+        self.build_ssl_context(ssl_cert, ssl_key, ssl_key_password)
         self._shd = None
         self._sfd = None
         self.procs: List[Worker] = []
@@ -143,19 +159,20 @@ class Granian:
         self.interrupt_children = []
         self.respawned_procs = {}
         self.reload_signal = False
+        self.lifetime_signal = False
         self.pid = None
 
-    def build_ssl_context(self, cert: Optional[Path], key: Optional[Path]):
+    def build_ssl_context(self, cert: Optional[Path], key: Optional[Path], password: Optional[str]):
         if not (cert and key):
             self.ssl_ctx = (False, None, None)
             return
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ctx.load_cert_chain(cert, key, None)
+        ctx.load_cert_chain(cert, key, password)
         # with cert.open("rb") as f:
         #     cert_contents = f.read()
         # with key.open("rb") as f:
         #     key_contents = f.read()
-        self.ssl_ctx = (True, str(cert.resolve()), str(key.resolve()))
+        self.ssl_ctx = (True, str(cert.resolve()), str(key.resolve()), password)
 
     @staticmethod
     def _spawn_asgi_worker(
@@ -177,7 +194,7 @@ class Granian:
         log_level: LogLevels,
         log_config: Dict[str, Any],
         log_access_fmt: Optional[str],
-        ssl_ctx: Tuple[bool, Optional[str], Optional[str]],
+        ssl_ctx: Tuple[bool, Optional[str], Optional[str], Optional[str]],
         scope_opts: Dict[str, Any],
     ):
         from granian._loops import loops, set_loop_signals
@@ -232,7 +249,7 @@ class Granian:
         log_level: LogLevels,
         log_config: Dict[str, Any],
         log_access_fmt: Optional[str],
-        ssl_ctx: Tuple[bool, Optional[str], Optional[str]],
+        ssl_ctx: Tuple[bool, Optional[str], Optional[str], Optional[str]],
         scope_opts: Dict[str, Any],
     ):
         from granian._loops import loops, set_loop_signals
@@ -294,7 +311,7 @@ class Granian:
         log_level: LogLevels,
         log_config: Dict[str, Any],
         log_access_fmt: Optional[str],
-        ssl_ctx: Tuple[bool, Optional[str], Optional[str]],
+        ssl_ctx: Tuple[bool, Optional[str], Optional[str], Optional[str]],
         scope_opts: Dict[str, Any],
     ):
         from granian._loops import loops, set_loop_signals
@@ -360,7 +377,7 @@ class Granian:
         log_level: LogLevels,
         log_config: Dict[str, Any],
         log_access_fmt: Optional[str],
-        ssl_ctx: Tuple[bool, Optional[str], Optional[str]],
+        ssl_ctx: Tuple[bool, Optional[str], Optional[str], Optional[str]],
         scope_opts: Dict[str, Any],
     ):
         from granian._loops import loops, set_loop_signals
@@ -458,6 +475,15 @@ class Granian:
             proc.join()
         self.procs.clear()
 
+    def _workers_lifetime_watcher(self, ttl):
+        time.sleep(ttl)
+        self.lifetime_signal = True
+        self.main_loop_interrupt.set()
+
+    def _watch_workers_lifetime(self, ttl):
+        waker = threading.Thread(target=self._workers_lifetime_watcher, args=(ttl,), daemon=True)
+        waker.start()
+
     def setup_signals(self):
         signals = [signal.SIGINT, signal.SIGTERM]
         if sys.platform == 'win32':
@@ -527,6 +553,10 @@ class Granian:
         logger.info(f'Listening at: {proto}://{self.bind_addr}:{self.bind_port}')
 
         self._spawn_workers(sock, spawn_target, target_loader)
+
+        if self.workers_lifetime is not None:
+            self._watch_workers_lifetime(self.workers_lifetime)
+
         return sock
 
     def shutdown(self, exit_code=0):
@@ -537,6 +567,14 @@ class Granian:
             exit_code = 1
         if exit_code:
             sys.exit(exit_code)
+
+    def _reload(self, sock, spawn_target, target_loader):
+        logger.info('HUP signal received, gracefully respawning workers..')
+        workers = list(range(self.workers))
+        self.reload_signal = False
+        self.respawned_procs.clear()
+        self.main_loop_interrupt.clear()
+        self._respawn_workers(workers, sock, spawn_target, target_loader, delay=self.respawn_interval)
 
     def _serve_loop(self, sock, spawn_target, target_loader):
         while True:
@@ -560,12 +598,26 @@ class Granian:
                 self._respawn_workers(workers, sock, spawn_target, target_loader)
 
             if self.reload_signal:
-                logger.info('HUP signal received, gracefully respawning workers..')
-                workers = list(range(self.workers))
-                self.reload_signal = False
-                self.respawned_procs.clear()
+                self._reload(sock, spawn_target, target_loader)
+
+            if self.lifetime_signal:
+                self.lifetime_signal = False
                 self.main_loop_interrupt.clear()
-                self._respawn_workers(workers, sock, spawn_target, target_loader, delay=self.respawn_interval)
+                ttl = self.workers_lifetime * 0.95
+                now = time.time()
+                etas = [self.workers_lifetime]
+                for worker in list(self.procs):
+                    if (now - worker.birth) >= ttl:
+                        logger.info(f'worker-{worker.idx + 1} lifetime expired, gracefully respawning..')
+                        self._respawn_workers(
+                            [worker.idx], sock, spawn_target, target_loader, delay=self.respawn_interval
+                        )
+                    else:
+                        elapsed = now - worker.birth
+                        remaining = self.workers_lifetime - elapsed
+                        etas.append(max(60, int(remaining)))
+                next_tick = min(etas)
+                self._watch_workers_lifetime(next_tick)
 
     def _serve(self, spawn_target, target_loader):
         sock = self.startup(spawn_target, target_loader)
@@ -577,18 +629,40 @@ class Granian:
             logger.error('Using --reload requires the granian[reload] extra')
             sys.exit(1)
 
-        reload_path = Path.cwd()
+        # Use given or default filter rules
+        reload_filter = self.reload_filter or watchfiles.filters.DefaultFilter
+        # Extend `reload_filter` with explicit args
+        ignore_dirs = (*reload_filter.ignore_dirs, *self.reload_ignore_dirs)
+        ignore_entity_patterns = (
+            *reload_filter.ignore_entity_patterns,
+            *self.reload_ignore_patterns,
+        )
+        ignore_paths = (*reload_filter.ignore_paths, *self.reload_ignore_paths)
+        # Construct new filter
+        reload_filter = watchfiles.filters.DefaultFilter(
+            ignore_dirs=ignore_dirs, ignore_entity_patterns=ignore_entity_patterns, ignore_paths=ignore_paths
+        )
+
         sock = self.startup(spawn_target, target_loader)
 
-        try:
-            for changes in watchfiles.watch(reload_path, stop_event=self.main_loop_interrupt):
-                logger.info('Changes detected, reloading workers..')
-                for change, file in changes:
-                    logger.info(f'{change.raw_str().capitalize()}: {file}')
-                self._stop_workers()
-                self._spawn_workers(sock, spawn_target, target_loader)
-        except StopIteration:
-            pass
+        serve_loop = True
+        while serve_loop:
+            try:
+                for changes in watchfiles.watch(
+                    *self.reload_paths, watch_filter=reload_filter, stop_event=self.main_loop_interrupt
+                ):
+                    logger.info('Changes detected, reloading workers..')
+                    for change, file in changes:
+                        logger.info(f'{change.raw_str().capitalize()}: {file}')
+                    self._stop_workers()
+                    self._spawn_workers(sock, spawn_target, target_loader)
+            except StopIteration:
+                pass
+
+            if self.reload_signal:
+                self._reload(sock, spawn_target, target_loader)
+            else:
+                serve_loop = False
 
         self.shutdown()
 
@@ -608,7 +682,7 @@ class Granian:
             if wrap_loader:
                 target_loader = partial(target_loader, self.target)
         else:
-            target_loader = partial(load_target, self.target)
+            target_loader = partial(load_target, self.target, factory=self.factory)
 
         if not spawn_target:
             spawn_target = default_spawners[self.interface]
@@ -622,9 +696,9 @@ class Granian:
 
         if self.websockets:
             if self.interface == Interfaces.WSGI:
-                logger.info('Websockets are not supported on WSGI')
+                logger.info('Websockets are not supported on WSGI, ignoring')
             if self.http == HTTPModes.http2:
-                logger.info('Websockets are not supported on HTTP/2 only')
+                logger.info('Websockets are not supported on HTTP/2 only, ignoring')
 
         if setproctitle is not None:
             self.process_name = self.process_name or (
@@ -634,6 +708,13 @@ class Granian:
         elif self.process_name is not None:
             logger.error('Setting process name requires the granian[pname] extra')
             raise ConfigurationError('process_name')
+
+        if self.workers_lifetime is not None:
+            if self.reload_on_changes:
+                logger.info('Workers lifetime is not available in combination with changes reloader, ignoring')
+            if self.workers_lifetime < 60:
+                logger.error('Workers lifetime cannot be less than 60 seconds')
+                raise ConfigurationError('workers_lifetime')
 
         serve_method = self._serve_with_reloader if self.reload_on_changes else self._serve
         serve_method(spawn_target, target_loader)
