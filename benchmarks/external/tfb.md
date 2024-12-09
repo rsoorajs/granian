@@ -5,8 +5,8 @@
 [Repository](https://github.com/TechEmpower/FrameworkBenchmarks)    
 [Website](http://www.techempower.com/benchmarks/)
 
-Run at: Sun 04 Aug 2024, 12:26    
-Run ID: b0a928a6-ff24-462e-8445-fa2dc1bbc7ee ([visualize](https://www.techempower.com/benchmarks/#section=test&runid=b0a928a6-ff24-462e-8445-fa2dc1bbc7ee))
+Run at: Mon 02 Dec 2024, 16:45    
+Run ID: 3271d67e-16dc-4f2a-b69b-25ac94141a66 ([visualize](https://www.techempower.com/benchmarks/#section=test&runid=3271d67e-16dc-4f2a-b69b-25ac94141a66))
 
 
 ### Plain text
@@ -16,19 +16,16 @@ Run ID: b0a928a6-ff24-462e-8445-fa2dc1bbc7ee ([visualize](https://www.techempowe
 
 | Server | RPS | Change (rate) |
 | --- | --- | --- |
-| Granian (ASGI) | 1166131 | 0.58 |
-| Granian (RSGI) | 2017786 | 1.0 |
-| Robyn | 769536 | 0.38 |
-| Uvicorn (httptools) | 1044356 | 0.52 |
+| Robyn | 445724 | 445724.0 |
+| Uvicorn (httptools) | 1018793 | 1018793.0 |
 
 #### Sync
 
 | Server | RPS | Change (rate) |
 | --- | --- | --- |
-| Fastwsgi | 5282034 | 6.0 |
-| Granian (WSGI) | 879942 | 1.0 |
-| uWSGI | 181006 | 0.21 |
-| uWSGI + Nginx | 27557 | 0.03 |
+| Fastwsgi | 3992022 | 3992022.0 |
+| uWSGI | 181107 | 181107.0 |
+| uWSGI + Nginx | 26469 | 26469.0 |
 
 
 
@@ -39,19 +36,16 @@ Run ID: b0a928a6-ff24-462e-8445-fa2dc1bbc7ee ([visualize](https://www.techempowe
 
 | Server | RPS | Change (rate) |
 | --- | --- | --- |
-| FastWSGI (ASGI) | 1244090 | 1.03 |
-| Granian (ASGI) | 927179 | 0.76 |
-| Granian (RSGI) | 1213523 | 1.0 |
-| Robyn | 543473 | 0.45 |
-| Uvicorn (httptools) | 861796 | 0.71 |
+| FastWSGI (ASGI) | 1159909 | 1159909.0 |
+| Robyn | 336209 | 336209.0 |
+| Uvicorn (httptools) | 861982 | 861982.0 |
 
 #### Sync
 
 | Server | RPS | Change (rate) |
 | --- | --- | --- |
-| Fastwsgi | 2654621 | 3.3 |
-| Granian (WSGI) | 805147 | 1.0 |
-| uWSGI | 189019 | 0.23 |
-| uWSGI + Nginx | 15303 | 0.02 |
+| Fastwsgi | 2333950 | 2333950.0 |
+| uWSGI | 188667 | 188667.0 |
+| uWSGI + Nginx | 15316 | 15316.0 |
 
 
