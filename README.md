@@ -162,7 +162,7 @@ Options:
                                   human-readable duration) an idle blocking
                                   thread will be kept alive  [env var:
                                   GRANIAN_BLOCKING_THREADS_IDLE_TIMEOUT;
-                                  default: 30; 10<=x<=600]
+                                  default: 30; 5<=x<=600]
   --runtime-threads INTEGER RANGE
                                   Number of runtime threads (per worker)  [env
                                   var: GRANIAN_RUNTIME_THREADS; default: 1;
@@ -460,9 +460,11 @@ Given you specify N threads with the relevant option, in **st** mode Granian wil
 
 Benchmarks suggests **st** mode to be more efficient with a small amount of processes, while **mt** mode seems to scale more efficiently where you have a large number of CPUs. Real performance will though depend on specific application code, and thus *your mileage might vary*.
 
+By default (**auto** mode), Granian will pick the best option based on the rest of its configuration.
+
 ### Metrics
 
-Granian exposes the following runtime metrics in Prometheus format. All the metrics are prefixed with `granian_`, and ones marked with *worker* scope are tagged with a `worker` label containing the worker ID.
+Granian exposes the following runtime metrics in Prometheus format. All the metrics are prefixed with `granian_`, and the ones marked with *worker* scope are tagged with a `worker` label containing the worker ID.
 
 | metric name | type | unit | scope | description |
 | --- | --- | --- | --- | --- |
@@ -483,6 +485,35 @@ Granian exposes the following runtime metrics in Prometheus format. All the metr
 | `blocking_idle_cumulative` | counter | microseconds | worker | Cumulative idle time spent in the blocking threadpool |
 | `blocking_busy_cumulative` | counter | microseconds | worker | Cumulative busy time spent in the blocking threadpool |
 | `py_wait_cumulative` | counter | microseconds | worker | Cumulative time spent waiting on GIL (on the free-threaded build this is always 0) |
+
+### Static files
+
+Granian offers the ability to *offload* static files serving directly to the server, without calling your Python application in the process.
+
+The `--static-path-route` and `--static-path-mount` options accept multiple values, thus you can serve an arbitrary number of static *locations* in your application, the only condition being the number of routes and mounts specified should be the same:
+
+```
+$ granian \
+    --static-path-route /static \
+    --static-path-mount assets/static \
+    --static-path-route /media \
+    --static-path-mount assets/media \
+    package:app
+```
+
+#### Serving a specific file for directory listings
+
+Granian also provides the option to *rewrite* a static location pointing to a directory to a file contained in such directory. This allows you to serve, for example, an `index.html` file in the static path tree:
+
+```
+$ granian \
+    --static-path-route /docs \
+    --static-path-mount generated/docs \
+    --static-path-dir-to-file index.html \
+    package:app
+```
+
+> **Note:** while Granian performs a rewrite on the target directory, the file will still be served if the request path points to it directly (in the example above, requests pointing to `/docs/somefolder` and `/docs/somefolder/index.html` will both respond with the contents of `index.html` – if present). Also, the option will enable this behavior on all the static paths defined.
 
 ### Proxies and forwarded headers
 
