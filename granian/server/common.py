@@ -680,8 +680,8 @@ class AbstractServer(Generic[WT]):
                 self.metrics_enabled = False
                 logger.info('Metrics are not available in combination with changes reloader, ignoring')
 
-        if self.blocking_threads_idle_timeout < 10 or self.blocking_threads_idle_timeout > 600:
-            logger.error('Blocking threads idle timeout must be between 10 and 600 seconds')
+        if self.blocking_threads_idle_timeout < 5 or self.blocking_threads_idle_timeout > 600:
+            logger.error('Blocking threads idle timeout must be between 5 and 600 seconds')
             raise ConfigurationError('blocking_threads_idle_timeout')
 
         cpus = multiprocessing.cpu_count()

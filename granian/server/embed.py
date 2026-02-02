@@ -465,7 +465,7 @@ class Server(AbstractServer[AsyncWorker]):
             logger.error('Environment file(s) usage requires the granian[dotenv] extra')
             raise ConfigurationError('env_files')
 
-        if self.blocking_threads_idle_timeout < 10 or self.blocking_threads_idle_timeout > 600:
+        if self.blocking_threads_idle_timeout < 5 or self.blocking_threads_idle_timeout > 600:
             logger.error('Blocking threads idle timeout must be between 10 and 600 seconds')
             raise ConfigurationError('blocking_threads_idle_timeout')
 

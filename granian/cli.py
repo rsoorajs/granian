@@ -137,7 +137,7 @@ def option(*param_decls: str, cls: type[click.Option] | None = None, **attrs: An
 )
 @option(
     '--blocking-threads-idle-timeout',
-    type=Duration(10, 600),
+    type=Duration(5, 600),
     default=30,
     help='The maximum amount of time in seconds (or a human-readable duration) an idle blocking thread will be kept alive',
 )
